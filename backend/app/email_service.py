@@ -1,17 +1,34 @@
 import os
-import resend
+
+import sib_api_v3_sdk
+
+from sib_api_v3_sdk.rest import ApiException
+
 from datetime import datetime
 
 
 # ─────────────────────────────────────────────────────────────
-# Resend Configuration
+# Brevo Setup
 # ─────────────────────────────────────────────────────────────
 
-resend.api_key = os.getenv("RESEND_API_KEY")
+configuration = sib_api_v3_sdk.Configuration()
+
+configuration.api_key['api-key'] = os.getenv(
+    "BREVO_API_KEY"
+)
+
+api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
+    sib_api_v3_sdk.ApiClient(configuration)
+)
 
 EMAIL_FROM = os.getenv(
     "EMAIL_FROM",
-    "onboarding@resend.dev"
+    "yourgmail@gmail.com"
+)
+
+EMAIL_FROM_NAME = os.getenv(
+    "EMAIL_FROM_NAME",
+    "TaskFlow"
 )
 
 FRONTEND_URL = os.getenv(
@@ -33,20 +50,31 @@ def send_async(
     try:
 
         print("\n========== EMAIL DEBUG ==========")
-        print(f"TO: {to}")
-        print(f"SUBJECT: {subject}")
+        print("TO:", to)
+        print("SUBJECT:", subject)
         print("=================================\n")
 
-        response = resend.Emails.send({
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
 
-            "from": EMAIL_FROM,
+            sender={
+                "name": EMAIL_FROM_NAME,
+                "email": EMAIL_FROM
+            },
 
-            "to": [to],
+            to=[
+                {
+                    "email": to
+                }
+            ],
 
-            "subject": subject,
+            subject=subject,
 
-            "html": html_body,
-        })
+            html_content=html_body,
+        )
+
+        response = api_instance.send_transac_email(
+            send_smtp_email
+        )
 
         print(
             "[EMAIL] SENT SUCCESSFULLY:",
@@ -55,6 +83,16 @@ def send_async(
         )
 
         return response
+
+    except ApiException as e:
+
+        print(
+            "[BREVO ERROR]:",
+            str(e),
+            flush=True
+        )
+
+        return None
 
     except Exception as e:
 
@@ -82,12 +120,12 @@ def _base_template(content: str):
 
     <head>
 
-      <meta charset="UTF-8" />
+      <meta charset="UTF-8">
 
       <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0"
-      />
+      >
 
       <title>TaskFlow</title>
 
@@ -96,9 +134,9 @@ def _base_template(content: str):
     <body style="
       margin:0;
       padding:0;
-      background:#f4f7fb;
+      background:#f4f4f5;
       font-family:Arial,sans-serif;
-      color:#1f2937;
+      color:#111827;
     ">
 
       <table
@@ -118,10 +156,10 @@ def _base_template(content: str):
               cellspacing="0"
               style="
                 max-width:620px;
-                background:#ffffff;
+                background:white;
                 border-radius:16px;
                 overflow:hidden;
-                box-shadow:0 4px 20px rgba(0,0,0,0.06);
+                box-shadow:0 4px 16px rgba(0,0,0,0.08);
               "
             >
 
@@ -139,17 +177,16 @@ def _base_template(content: str):
                     margin:0;
                     color:white;
                     font-size:28px;
-                    letter-spacing:1px;
                   ">
                     TaskFlow
                   </h1>
 
                   <p style="
-                    margin-top:8px;
                     color:#d1d5db;
+                    margin-top:8px;
                     font-size:14px;
                   ">
-                    Task Management Platform
+                    Smart Task Management
                   </p>
 
                 </td>
@@ -177,9 +214,9 @@ def _base_template(content: str):
               <tr>
 
                 <td style="
-                  padding:24px 32px;
                   background:#f9fafb;
                   border-top:1px solid #e5e7eb;
+                  padding:24px;
                   text-align:center;
                 ">
 
@@ -188,16 +225,7 @@ def _base_template(content: str):
                     font-size:13px;
                     color:#6b7280;
                   ">
-                    © {current_year} TaskFlow.
-                    All rights reserved.
-                  </p>
-
-                  <p style="
-                    margin-top:8px;
-                    font-size:12px;
-                    color:#9ca3af;
-                  ">
-                    Manage your tasks efficiently.
+                    © {current_year} TaskFlow
                   </p>
 
                 </td>
@@ -238,7 +266,8 @@ def notify_task_assigned(
     content = f"""
 
     <p>
-      Hi <strong>{assignee_name or assignee_email}</strong>,
+      Hi
+      <strong>{assignee_name or assignee_email}</strong>,
     </p>
 
     <p>
@@ -249,9 +278,9 @@ def notify_task_assigned(
     <div style="
       background:#f9fafb;
       border:1px solid #e5e7eb;
-      border-radius:12px;
       padding:24px;
-      margin:28px 0;
+      border-radius:12px;
+      margin:24px 0;
     ">
 
       <h2 style="
@@ -264,41 +293,18 @@ def notify_task_assigned(
       <p style="
         color:#4b5563;
       ">
-        {task_description or 'No description provided.'}
+        {task_description or "No description provided"}
       </p>
 
-      <table
-        width="100%"
-        cellpadding="8"
-        cellspacing="0"
-        style="margin-top:20px;"
-      >
+      <p>
+        <strong>Priority:</strong>
+        {priority}
+      </p>
 
-        <tr>
-
-          <td>
-            <strong>Priority:</strong>
-          </td>
-
-          <td>
-            {priority}
-          </td>
-
-        </tr>
-
-        <tr>
-
-          <td>
-            <strong>Due Date:</strong>
-          </td>
-
-          <td>
-            {due}
-          </td>
-
-        </tr>
-
-      </table>
+      <p>
+        <strong>Due Date:</strong>
+        {due}
+      </p>
 
     </div>
 
@@ -311,7 +317,7 @@ def notify_task_assigned(
           background:#111827;
           color:white;
           padding:14px 28px;
-          border-radius:10px;
+          border-radius:8px;
           text-decoration:none;
           font-weight:bold;
         "
@@ -344,24 +350,21 @@ def notify_task_completed(
     content = f"""
 
     <p>
-      Hi <strong>{creator_name or creator_email}</strong>,
-    </p>
-
-    <p>
-      Great news 🎉
+      Hi
+      <strong>{creator_name or creator_email}</strong>,
     </p>
 
     <p>
       <strong>{completer_name}</strong>
-      completed your task successfully.
+      completed your task 🎉
     </p>
 
     <div style="
       background:#ecfdf5;
       border:1px solid #10b981;
-      border-radius:12px;
       padding:24px;
-      margin:28px 0;
+      border-radius:12px;
+      margin:24px 0;
     ">
 
       <h2 style="
@@ -389,12 +392,12 @@ def notify_task_completed(
           background:#10b981;
           color:white;
           padding:14px 28px;
-          border-radius:10px;
+          border-radius:8px;
           text-decoration:none;
           font-weight:bold;
         "
       >
-        View Completed Task
+        View Task
       </a>
 
     </div>
