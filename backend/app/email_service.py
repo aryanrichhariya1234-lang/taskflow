@@ -1,68 +1,50 @@
 import os
-import smtplib
 
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import resend
 
 
-SMTP_EMAIL = os.getenv("SMTP_EMAIL")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+# ───────────────────────────────────────────────────────────────────────────────
+# Resend Setup
+# ───────────────────────────────────────────────────────────────────────────────
+
+resend.api_key = os.getenv("RESEND_API_KEY")
 
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Send Email
 # ───────────────────────────────────────────────────────────────────────────────
 
-def _send(to: str, subject: str, html_body: str):
-
-    print("========== EMAIL DEBUG ==========", flush=True)
-    print("TO:", to, flush=True)
-    print("SUBJECT:", subject, flush=True)
-    print("SMTP EMAIL:", SMTP_EMAIL, flush=True)
+def send_async(
+    to: str,
+    subject: str,
+    html_body: str,
+):
 
     try:
 
-        if not SMTP_EMAIL:
-            print("SMTP_EMAIL missing", flush=True)
-            return
+        print("========== EMAIL DEBUG ==========", flush=True)
+        print("TO:", to, flush=True)
+        print("SUBJECT:", subject, flush=True)
 
-        if not SMTP_PASSWORD:
-            print("SMTP_PASSWORD missing", flush=True)
-            return
+        response = resend.Emails.send({
 
-        msg = MIMEMultipart("alternative")
+            "from": os.getenv(
+                "EMAIL_FROM",
+                "onboarding@resend.dev"
+            ),
 
-        msg["Subject"] = subject
-        msg["From"] = SMTP_EMAIL
-        msg["To"] = to
+            "to": [to],
 
-        msg.attach(
-            MIMEText(html_body, "html")
+            "subject": subject,
+
+            "html": html_body,
+        })
+
+        print(
+            "[email] SENT SUCCESSFULLY",
+            response,
+            flush=True
         )
-
-        print("Connecting to Gmail SMTP...", flush=True)
-
-        with smtplib.SMTP_SSL(
-            "smtp.gmail.com",
-            465
-        ) as smtp:
-
-            print("Logging into Gmail...", flush=True)
-
-            smtp.login(
-                SMTP_EMAIL,
-                SMTP_PASSWORD
-            )
-
-            print("Sending email...", flush=True)
-
-            smtp.sendmail(
-                SMTP_EMAIL,
-                to,
-                msg.as_string(),
-            )
-
-        print(f"[email] SUCCESS → {to}", flush=True)
 
     except Exception as e:
 
@@ -74,25 +56,7 @@ def _send(to: str, subject: str, html_body: str):
 
 
 # ───────────────────────────────────────────────────────────────────────────────
-# NO THREADS IN PRODUCTION
-# ───────────────────────────────────────────────────────────────────────────────
-
-def send_async(
-    to: str,
-    subject: str,
-    html_body: str
-):
-
-    # synchronous call
-    _send(
-        to,
-        subject,
-        html_body
-    )
-
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Templates
+# Base Template
 # ───────────────────────────────────────────────────────────────────────────────
 
 def _base_template(content: str):
@@ -103,8 +67,15 @@ def _base_template(content: str):
     )
 
     return f"""
+    <!DOCTYPE html>
+
     <html>
-    <body style="font-family:sans-serif;background:#f5f4f0;padding:40px;">
+
+    <body style="
+        font-family:sans-serif;
+        background:#f5f4f0;
+        padding:40px;
+    ">
 
       <div style="
         max-width:600px;
@@ -114,19 +85,34 @@ def _base_template(content: str):
         border-radius:12px;
       ">
 
-        <h2>TaskFlow</h2>
+        <h2 style="margin-top:0;">
+          TaskFlow
+        </h2>
 
         {content}
 
-        <p style="margin-top:24px;">
-          <a href="{frontend_url}">
+        <p style="margin-top:32px;">
+
+          <a
+            href="{frontend_url}"
+            style="
+              display:inline-block;
+              padding:12px 20px;
+              background:black;
+              color:white;
+              text-decoration:none;
+              border-radius:8px;
+            "
+          >
             Open TaskFlow
           </a>
+
         </p>
 
       </div>
 
     </body>
+
     </html>
     """
 
@@ -151,19 +137,42 @@ def notify_task_assigned(
         "http://localhost:3000"
     )
 
+    due = due_date if due_date else "No due date"
+
     content = f"""
-    <p>Hi {assignee_name},</p>
+    <p>
+      Hi {assignee_name or assignee_email},
+    </p>
 
     <p>
       <strong>{creator_name}</strong>
       assigned a task to you.
     </p>
 
-    <h3>{task_title}</h3>
+    <div style="
+      background:#f5f5f5;
+      padding:20px;
+      border-radius:8px;
+      margin:24px 0;
+    ">
 
-    <p>{task_description}</p>
+      <h3 style="margin-top:0;">
+        {task_title}
+      </h3>
 
-    <p>Priority: {priority}</p>
+      <p>
+        {task_description or "No description"}
+      </p>
+
+      <p>
+        <strong>Priority:</strong> {priority}
+      </p>
+
+      <p>
+        <strong>Due:</strong> {due}
+      </p>
+
+    </div>
 
     <a href="{frontend_url}/tasks/{task_id}">
       View Task
@@ -195,14 +204,31 @@ def notify_task_completed(
     )
 
     content = f"""
-    <p>Hi {creator_name},</p>
+    <p>
+      Hi {creator_name or creator_email},
+    </p>
 
     <p>
       <strong>{completer_name}</strong>
-      completed your task.
+      completed your task 🎉
     </p>
 
-    <h3>{task_title}</h3>
+    <div style="
+      background:#f5f5f5;
+      padding:20px;
+      border-radius:8px;
+      margin:24px 0;
+    ">
+
+      <h3 style="margin-top:0;">
+        {task_title}
+      </h3>
+
+      <p>
+        Status: DONE
+      </p>
+
+    </div>
 
     <a href="{frontend_url}/tasks/{task_id}">
       View Task
