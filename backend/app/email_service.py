@@ -1,6 +1,5 @@
 import os
 import smtplib
-import threading
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -10,9 +9,26 @@ SMTP_EMAIL = os.getenv("SMTP_EMAIL")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
 
+# ───────────────────────────────────────────────────────────────────────────────
+# Send Email
+# ───────────────────────────────────────────────────────────────────────────────
+
 def _send(to: str, subject: str, html_body: str):
 
+    print("========== EMAIL DEBUG ==========", flush=True)
+    print("TO:", to, flush=True)
+    print("SUBJECT:", subject, flush=True)
+    print("SMTP EMAIL:", SMTP_EMAIL, flush=True)
+
     try:
+
+        if not SMTP_EMAIL:
+            print("SMTP_EMAIL missing", flush=True)
+            return
+
+        if not SMTP_PASSWORD:
+            print("SMTP_PASSWORD missing", flush=True)
+            return
 
         msg = MIMEMultipart("alternative")
 
@@ -20,11 +36,25 @@ def _send(to: str, subject: str, html_body: str):
         msg["From"] = SMTP_EMAIL
         msg["To"] = to
 
-        msg.attach(MIMEText(html_body, "html"))
+        msg.attach(
+            MIMEText(html_body, "html")
+        )
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        print("Connecting to Gmail SMTP...", flush=True)
 
-            smtp.login(SMTP_EMAIL, SMTP_PASSWORD)
+        with smtplib.SMTP_SSL(
+            "smtp.gmail.com",
+            465
+        ) as smtp:
+
+            print("Logging into Gmail...", flush=True)
+
+            smtp.login(
+                SMTP_EMAIL,
+                SMTP_PASSWORD
+            )
+
+            print("Sending email...", flush=True)
 
             smtp.sendmail(
                 SMTP_EMAIL,
@@ -32,22 +62,33 @@ def _send(to: str, subject: str, html_body: str):
                 msg.as_string(),
             )
 
-        print(f"[email] Sent to {to}")
+        print(f"[email] SUCCESS → {to}", flush=True)
 
     except Exception as e:
 
-        print("[email] ERROR:", str(e))
+        print(
+            "[email] ERROR:",
+            str(e),
+            flush=True
+        )
 
 
-def send_async(to: str, subject: str, html_body: str):
+# ───────────────────────────────────────────────────────────────────────────────
+# NO THREADS IN PRODUCTION
+# ───────────────────────────────────────────────────────────────────────────────
 
-    t = threading.Thread(
-        target=_send,
-        args=(to, subject, html_body),
-        daemon=True,
+def send_async(
+    to: str,
+    subject: str,
+    html_body: str
+):
+
+    # synchronous call
+    _send(
+        to,
+        subject,
+        html_body
     )
-
-    t.start()
 
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -64,19 +105,35 @@ def _base_template(content: str):
     return f"""
     <html>
     <body style="font-family:sans-serif;background:#f5f4f0;padding:40px;">
-      <div style="max-width:600px;margin:auto;background:white;padding:32px;border-radius:12px;">
+
+      <div style="
+        max-width:600px;
+        margin:auto;
+        background:white;
+        padding:32px;
+        border-radius:12px;
+      ">
+
         <h2>TaskFlow</h2>
+
         {content}
+
         <p style="margin-top:24px;">
           <a href="{frontend_url}">
             Open TaskFlow
           </a>
         </p>
+
       </div>
+
     </body>
     </html>
     """
 
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Assignment Email
+# ───────────────────────────────────────────────────────────────────────────────
 
 def notify_task_assigned(
     assignee_email,
@@ -119,6 +176,10 @@ def notify_task_assigned(
         _base_template(content),
     )
 
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Completion Email
+# ───────────────────────────────────────────────────────────────────────────────
 
 def notify_task_completed(
     creator_email,
