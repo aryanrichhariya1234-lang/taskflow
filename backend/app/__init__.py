@@ -36,7 +36,7 @@ def create_app():
         app,
         origins=[
             os.getenv(
-                "https://taskflow-six-inky.vercel.app",
+                "FRONTEND_URL",
                 "http://localhost:3000"
             )
         ],
