@@ -142,7 +142,9 @@ def create_task():
         }), 500
 
     task = task_result.data[0]
-
+    print("ASSIGNEE ID:", assignee_id)
+    print("CURRENT USER:", g.user_id)
+    print("TASK:", task)    
     # Log assignment
     if assignee_id:
 
@@ -157,10 +159,17 @@ def create_task():
         )
 
         # Notify assignee
-        if assignee_id != g.user_id and task.get("assignee"):
+    if assignee_id != g.user_id:
 
-            assignee = task["assignee"]
-            creator = task["creator"] or {}
+        assignee = _get_user(assignee_id)
+        creator = _get_user(g.user_id)
+
+        print("ASSIGNEE:", assignee)
+        print("CREATOR:", creator)
+
+        if assignee and creator:
+
+            print("CALLING EMAIL SERVICE")
 
             notify_task_assigned(
                 assignee_email=assignee["email"],
@@ -172,6 +181,8 @@ def create_task():
                 priority=priority,
                 due_date=due_date,
             )
+
+            print("EMAIL SERVICE CALLED")
 
     return jsonify(task), 201
 
